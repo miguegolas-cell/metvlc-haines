@@ -132,7 +132,7 @@
 
     <div class="header">
       <h1>Índice de Haines</h1>
-      <p>Cálculo experimental a partir de GFS 0.25º · Comunitat Valenciana y entorno próximo</p>
+      <p>Cálculo experimental a partir de GFS 0.25º · Recortado a la Comunitat Valenciana</p>
     </div>
 
     <div class="controls">
@@ -165,13 +165,19 @@
 
   <script>
     let geojsonData = null;
+    let cvBoundaryData = null;
+    let cvBoundaryLayer = null;
     let currentVariant = "haines_medio";
-    let rasterCanvas = null;
     let rasterLayer = null;
 
     const map = L.map("map", {
-      preferCanvas: true
-    }).setView([39.45, -0.55], 8);
+      preferCanvas: true,
+      maxBounds: [
+        [37.50, -2.10],
+        [41.15, 1.15]
+      ],
+      maxBoundsViscosity: 0.8
+    }).setView([39.45, -0.45], 8);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 12,
@@ -241,30 +247,75 @@
       return stops[0].color;
     }
 
-    function prepareRasterCanvas() {
-      if (rasterLayer) {
-        map.removeLayer(rasterLayer);
-      }
+    function drawGeoJSONPath(ctx, geojson) {
+      if (!geojson) return;
 
-      const size = map.getSize();
+      const features = geojson.type === "FeatureCollection"
+        ? geojson.features
+        : [geojson];
 
-      rasterCanvas = document.createElement("canvas");
-      rasterCanvas.width = size.x;
-      rasterCanvas.height = size.y;
-      rasterCanvas.style.width = size.x + "px";
-      rasterCanvas.style.height = size.y + "px";
-      rasterCanvas.style.opacity = "0.68";
-      rasterCanvas.style.pointerEvents = "none";
-      rasterCanvas.style.filter = "blur(2px)";
+      features.forEach(feature => {
+        const geometry = feature.geometry;
+        if (!geometry) return;
 
-      rasterLayer = L.imageOverlay(
-        rasterCanvas.toDataURL(),
-        map.getBounds(),
-        {
-          opacity: 0.72,
-          interactive: false
+        let polygons = [];
+
+        if (geometry.type === "Polygon") {
+          polygons = [geometry.coordinates];
         }
-      ).addTo(map);
+
+        if (geometry.type === "MultiPolygon") {
+          polygons = geometry.coordinates;
+        }
+
+        polygons.forEach(polygon => {
+          polygon.forEach(ring => {
+            ring.forEach((coord, index) => {
+              const lon = coord[0];
+              const lat = coord[1];
+              const point = map.latLngToContainerPoint([lat, lon]);
+
+              if (index === 0) {
+                ctx.moveTo(point.x, point.y);
+              } else {
+                ctx.lineTo(point.x, point.y);
+              }
+            });
+
+            ctx.closePath();
+          });
+        });
+      });
+    }
+
+    function maskCanvasToGeoJSON(sourceCanvas, geojson) {
+      if (!geojson) return sourceCanvas;
+
+      const width = sourceCanvas.width;
+      const height = sourceCanvas.height;
+
+      const maskCanvas = document.createElement("canvas");
+      const maskCtx = maskCanvas.getContext("2d");
+
+      maskCanvas.width = width;
+      maskCanvas.height = height;
+
+      maskCtx.beginPath();
+      drawGeoJSONPath(maskCtx, geojson);
+      maskCtx.fillStyle = "white";
+      maskCtx.fill("evenodd");
+
+      const outputCanvas = document.createElement("canvas");
+      const outputCtx = outputCanvas.getContext("2d");
+
+      outputCanvas.width = width;
+      outputCanvas.height = height;
+
+      outputCtx.drawImage(sourceCanvas, 0, 0);
+      outputCtx.globalCompositeOperation = "destination-in";
+      outputCtx.drawImage(maskCanvas, 0, 0);
+
+      return outputCanvas;
     }
 
     function drawRaster() {
@@ -290,18 +341,7 @@
         };
       });
 
-      /*
-        Tamaño del píxel raster.
-        Menor = más fino pero más pesado.
-        4 o 5 suele quedar bien.
-      */
       const step = 5;
-
-      /*
-        Potencia IDW:
-        2 = transición suave.
-        3 = algo más ajustado al punto.
-      */
       const power = 2.2;
 
       for (let y = 0; y < size.y; y += step) {
@@ -333,10 +373,6 @@
         }
       }
 
-      /*
-        Suavizado final: se pinta el canvas interpolado
-        sobre otro canvas con un pequeño desenfoque visual.
-      */
       const smoothCanvas = document.createElement("canvas");
       const smoothCtx = smoothCanvas.getContext("2d");
 
@@ -346,20 +382,24 @@
       smoothCtx.filter = "blur(3px)";
       smoothCtx.drawImage(canvas, 0, 0);
 
+      const clippedCanvas = maskCanvasToGeoJSON(smoothCanvas, cvBoundaryData);
+
       if (rasterLayer) {
         map.removeLayer(rasterLayer);
       }
 
       rasterLayer = L.imageOverlay(
-        smoothCanvas.toDataURL("image/png"),
+        clippedCanvas.toDataURL("image/png"),
         map.getBounds(),
         {
-          opacity: 0.72,
+          opacity: 0.74,
           interactive: false
         }
       ).addTo(map);
 
-      rasterLayer.bringToFront();
+      if (cvBoundaryLayer) {
+        cvBoundaryLayer.bringToFront();
+      }
     }
 
     function setVariant(variant) {
@@ -424,6 +464,35 @@
     map.on("moveend zoomend resize", function() {
       drawRaster();
     });
+
+    fetch("cv.geojson")
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("No se pudo cargar cv.geojson");
+        }
+        return response.json();
+      })
+      .then(data => {
+        cvBoundaryData = data;
+
+        cvBoundaryLayer = L.geoJSON(cvBoundaryData, {
+          style: {
+            color: "#0b2f4f",
+            weight: 2.2,
+            opacity: 0.95,
+            fillOpacity: 0
+          }
+        }).addTo(map);
+
+        map.fitBounds(cvBoundaryLayer.getBounds(), {
+          padding: [20, 20]
+        });
+
+        drawRaster();
+      })
+      .catch(error => {
+        console.warn("No se ha podido cargar el límite autonómico. El raster se mostrará sin recorte.", error);
+      });
 
     fetch("haines.geojson")
       .then(response => {

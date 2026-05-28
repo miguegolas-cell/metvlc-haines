@@ -287,7 +287,63 @@
         });
       });
     }
+let outsideMaskLayer = null;
 
+function createOutsideMask(geojson) {
+  if (!geojson) return;
+
+  if (outsideMaskLayer) {
+    map.removeLayer(outsideMaskLayer);
+  }
+
+  const outerRing = [
+    [34.0, -6.0],
+    [34.0, 4.0],
+    [43.5, 4.0],
+    [43.5, -6.0],
+    [34.0, -6.0]
+  ];
+
+  const holes = [];
+
+  const features = geojson.type === "FeatureCollection"
+    ? geojson.features
+    : [geojson];
+
+  features.forEach(feature => {
+    const geometry = feature.geometry;
+    if (!geometry) return;
+
+    if (geometry.type === "Polygon") {
+      const ring = geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+      holes.push(ring);
+    }
+
+    if (geometry.type === "MultiPolygon") {
+      geometry.coordinates.forEach(poly => {
+        const ring = poly[0].map(coord => [coord[1], coord[0]]);
+        holes.push(ring);
+      });
+    }
+  });
+
+  outsideMaskLayer = L.polygon(
+    [outerRing, ...holes],
+    {
+      color: "#eef3f6",
+      weight: 0,
+      fillColor: "#eef3f6",
+      fillOpacity: 0.92,
+      interactive: false
+    }
+  ).addTo(map);
+
+  outsideMaskLayer.bringToFront();
+
+  if (cvBoundaryLayer) {
+    cvBoundaryLayer.bringToFront();
+  }
+}
     function maskCanvasToGeoJSON(sourceCanvas, geojson) {
       if (!geojson) return sourceCanvas;
 

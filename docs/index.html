@@ -1,8 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>MetVlc - Índice de Haines</title>
+  <meta charset="UTF-8" />
+  <title>MetVlc · Índice de Haines</title>
+
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
   <style>
     body {
       margin: 0;
@@ -11,41 +17,243 @@
       color: #263238;
     }
 
-    .contenedor {
-      max-width: 1100px;
-      margin: 40px auto;
-      background: white;
+    .page {
+      max-width: 1200px;
+      margin: 25px auto;
+      background: #ffffff;
       border-radius: 16px;
-      padding: 30px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      overflow: hidden;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.14);
+    }
+
+    .header {
+      background: linear-gradient(135deg, #0b2f4f 0%, #0b6fa4 65%, #ff6a2a 100%);
+      color: white;
+      padding: 18px 24px;
       text-align: center;
     }
 
-    h1 {
-      color: #0b2f4f;
-      margin-bottom: 10px;
+    .header h1 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
     }
 
-    .aviso {
-      margin-top: 20px;
-      padding: 16px;
+    .header p {
+      margin: 6px 0 0;
+      font-size: 14px;
+      color: #e8f5ff;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 15px;
+      background: #f6f9fb;
+      border-bottom: 1px solid #dfe8ee;
+    }
+
+    .controls button {
+      border: 0;
+      padding: 10px 16px;
       border-radius: 10px;
-      background: #eef6fb;
-      border-left: 6px solid #0b6fa4;
-      text-align: left;
+      background: #0b2f4f;
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+    }
+
+    .controls button.active {
+      background: #ff6a2a;
+    }
+
+    #map {
+      width: 100%;
+      height: 720px;
+    }
+
+    .legend {
+      padding: 14px 18px;
+      background: #ffffff;
+      border-top: 1px solid #dfe8ee;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .legend span {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
+    .meta {
+      font-size: 13px;
+      color: #51636d;
+      padding: 0 18px 16px;
+      background: #ffffff;
     }
   </style>
 </head>
+
 <body>
 
-  <div class="contenedor">
-    <h1>MetVlc · Índice de Haines</h1>
-    <p>Visor en preparación para el cálculo automático del Índice de Haines.</p>
+  <div class="page">
 
-    <div class="aviso">
-      Si ves esta página publicada desde GitHub Pages, el primer paso está correcto.
+    <div class="header">
+      <h1>Índice de Haines</h1>
+      <p>Cálculo experimental a partir de GFS 0.25º · Comunitat Valenciana y entorno próximo</p>
     </div>
+
+    <div class="controls">
+      <button id="btn-bajo" onclick="setVariant('haines_bajo')">Haines bajo</button>
+      <button id="btn-medio" class="active" onclick="setVariant('haines_medio')">Haines medio</button>
+      <button id="btn-alto" onclick="setVariant('haines_alto')">Haines alto</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="legend">
+      <b>Leyenda:</b>
+      <span style="background:#2e7d32;"></span>2-3 Muy bajo/bajo
+      &nbsp;&nbsp;
+      <span style="background:#fdd835;"></span>4 Moderado
+      &nbsp;&nbsp;
+      <span style="background:#fb8c00;"></span>5 Alto
+      &nbsp;&nbsp;
+      <span style="background:#d32f2f;"></span>6 Muy alto
+    </div>
+
+    <div class="meta" id="metadata">
+      Cargando metadatos...
+    </div>
+
   </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let geojsonData = null;
+    let currentLayer = null;
+    let currentVariant = "haines_medio";
+
+    const map = L.map("map").setView([39.45, -0.55], 8);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 12,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(map);
+
+    function colorHaines(value) {
+      if (value <= 3) return "#2e7d32";
+      if (value === 4) return "#fdd835";
+      if (value === 5) return "#fb8c00";
+      return "#d32f2f";
+    }
+
+    function labelVariant(variant) {
+      if (variant === "haines_bajo") return "Haines bajo";
+      if (variant === "haines_medio") return "Haines medio";
+      if (variant === "haines_alto") return "Haines alto";
+      return "Haines";
+    }
+
+    function drawLayer() {
+      if (!geojsonData) return;
+
+      if (currentLayer) {
+        map.removeLayer(currentLayer);
+      }
+
+      currentLayer = L.geoJSON(geojsonData, {
+        pointToLayer: function(feature, latlng) {
+          const value = feature.properties[currentVariant];
+
+          return L.circleMarker(latlng, {
+            radius: 8,
+            fillColor: colorHaines(value),
+            color: "#263238",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 0.82
+          });
+        },
+
+        onEachFeature: function(feature, layer) {
+          const p = feature.properties;
+          const value = p[currentVariant];
+
+          layer.bindPopup(`
+            <b>${labelVariant(currentVariant)}: ${value}</b><br>
+            <hr>
+            <b>Haines bajo:</b> ${p.haines_bajo}<br>
+            <b>Haines medio:</b> ${p.haines_medio}<br>
+            <b>Haines alto:</b> ${p.haines_alto}<br>
+            <hr>
+            <b>Estabilidad media:</b> ${p.estabilidad_media} ºC<br>
+            <b>Sequedad media:</b> ${p.sequedad_media} ºC<br>
+            <b>T850:</b> ${p.t850} ºC<br>
+            <b>T700:</b> ${p.t700} ºC<br>
+            <b>HR850:</b> ${p.rh850} %
+          `);
+        }
+      }).addTo(map);
+    }
+
+    function setVariant(variant) {
+      currentVariant = variant;
+
+      document.querySelectorAll(".controls button").forEach(btn => {
+        btn.classList.remove("active");
+      });
+
+      if (variant === "haines_bajo") {
+        document.getElementById("btn-bajo").classList.add("active");
+      }
+
+      if (variant === "haines_medio") {
+        document.getElementById("btn-medio").classList.add("active");
+      }
+
+      if (variant === "haines_alto") {
+        document.getElementById("btn-alto").classList.add("active");
+      }
+
+      drawLayer();
+    }
+
+    fetch("haines.geojson")
+      .then(response => response.json())
+      .then(data => {
+        geojsonData = data;
+        drawLayer();
+      })
+      .catch(error => {
+        alert("No se ha podido cargar haines.geojson");
+        console.error(error);
+      });
+
+    fetch("haines_metadata.json")
+      .then(response => response.json())
+      .then(meta => {
+        document.getElementById("metadata").innerHTML = `
+          <b>Fuente:</b> ${meta.source || "GFS"} ·
+          <b>Ciclo:</b> ${meta.date || ""} ${meta.cycle_utc || ""} UTC ·
+          <b>Predicción:</b> +${meta.forecast_hour || 0} h ·
+          <b>Generado:</b> ${meta.generated_utc || ""}
+        `;
+      })
+      .catch(() => {
+        document.getElementById("metadata").innerHTML =
+          "No se han podido cargar los metadatos.";
+      });
+  </script>
 
 </body>
 </html>

@@ -531,20 +531,20 @@ function createOutsideMask(geojson) {
       .then(data => {
         cvBoundaryData = data;
 
-        cvBoundaryLayer = L.geoJSON(cvBoundaryData, {
-          style: {
-            color: "#0b2f4f",
-            weight: 2.2,
-            opacity: 0.95,
-            fillOpacity: 0
-          }
-        }).addTo(map);
+       cvBoundaryLayer = L.geoJSON(cvBoundaryData, {
+  style: {
+    color: "#0b2f4f",
+    weight: 2.2,
+    opacity: 0.95,
+    fillOpacity: 0
+  }
+}).addTo(map);
 
-        map.fitBounds(cvBoundaryLayer.getBounds(), {
-          padding: [20, 20]
-        });
+map.fitBounds(cvBoundaryLayer.getBounds(), {
+  padding: [20, 20]
+});
 
-        drawRaster();
+drawRaster();
       })
       .catch(error => {
         console.warn("No se ha podido cargar el límite autonómico. El raster se mostrará sin recorte.", error);

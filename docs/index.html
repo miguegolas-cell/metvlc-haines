@@ -80,6 +80,7 @@
     #map {
       width: 100%;
       height: 720px;
+      background: #dce8ee;
     }
 
     .legend {
@@ -93,8 +94,8 @@
 
     .legend span {
       display: inline-block;
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 14px;
       margin-right: 6px;
       vertical-align: middle;
       border: 1px solid rgba(0,0,0,0.15);
@@ -106,6 +107,11 @@
       padding: 0 18px 18px;
       background: #ffffff;
       text-align: center;
+    }
+
+    .leaflet-popup-content {
+      font-size: 13px;
+      line-height: 1.45;
     }
 
     @media screen and (max-width: 900px) {
@@ -159,22 +165,18 @@
 
   <script>
     let geojsonData = null;
-    let currentLayer = null;
     let currentVariant = "haines_medio";
+    let rasterCanvas = null;
+    let rasterLayer = null;
 
-    const map = L.map("map").setView([39.45, -0.55], 8);
+    const map = L.map("map", {
+      preferCanvas: true
+    }).setView([39.45, -0.55], 8);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 12,
       attribution: "&copy; OpenStreetMap"
     }).addTo(map);
-
-    function colorHaines(value) {
-      if (value <= 3) return "#2e7d32";
-      if (value === 4) return "#fdd835";
-      if (value === 5) return "#fb8c00";
-      return "#d32f2f";
-    }
 
     function labelVariant(variant) {
       if (variant === "haines_bajo") return "Haines bajo";
@@ -197,40 +199,207 @@
       }
     }
 
-    function drawLayer() {
-      if (!geojsonData) return;
+    function hexToRgb(hex) {
+      const clean = hex.replace("#", "");
+      return {
+        r: parseInt(clean.substring(0, 2), 16),
+        g: parseInt(clean.substring(2, 4), 16),
+        b: parseInt(clean.substring(4, 6), 16)
+      };
+    }
 
-      if (currentLayer) {
-        map.removeLayer(currentLayer);
+    function interpolateColor(c1, c2, t) {
+      return {
+        r: Math.round(c1.r + (c2.r - c1.r) * t),
+        g: Math.round(c1.g + (c2.g - c1.g) * t),
+        b: Math.round(c1.b + (c2.b - c1.b) * t)
+      };
+    }
+
+    function colorContinuous(value) {
+      const stops = [
+        { value: 2, color: hexToRgb("#2e7d32") },
+        { value: 3, color: hexToRgb("#66bb6a") },
+        { value: 4, color: hexToRgb("#fdd835") },
+        { value: 5, color: hexToRgb("#fb8c00") },
+        { value: 6, color: hexToRgb("#d32f2f") }
+      ];
+
+      if (value <= 2) return stops[0].color;
+      if (value >= 6) return stops[stops.length - 1].color;
+
+      for (let i = 0; i < stops.length - 1; i++) {
+        const a = stops[i];
+        const b = stops[i + 1];
+
+        if (value >= a.value && value <= b.value) {
+          const t = (value - a.value) / (b.value - a.value);
+          return interpolateColor(a.color, b.color, t);
+        }
       }
 
-      currentLayer = L.layerGroup();
+      return stops[0].color;
+    }
+
+    function prepareRasterCanvas() {
+      if (rasterLayer) {
+        map.removeLayer(rasterLayer);
+      }
+
+      const size = map.getSize();
+
+      rasterCanvas = document.createElement("canvas");
+      rasterCanvas.width = size.x;
+      rasterCanvas.height = size.y;
+      rasterCanvas.style.width = size.x + "px";
+      rasterCanvas.style.height = size.y + "px";
+      rasterCanvas.style.opacity = "0.68";
+      rasterCanvas.style.pointerEvents = "none";
+      rasterCanvas.style.filter = "blur(2px)";
+
+      rasterLayer = L.imageOverlay(
+        rasterCanvas.toDataURL(),
+        map.getBounds(),
+        {
+          opacity: 0.72,
+          interactive: false
+        }
+      ).addTo(map);
+    }
+
+    function drawRaster() {
+      if (!geojsonData) return;
+
+      const size = map.getSize();
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = size.x;
+      canvas.height = size.y;
+
+      const points = geojsonData.features.map(feature => {
+        const coords = feature.geometry.coordinates;
+        const latlng = L.latLng(coords[1], coords[0]);
+        const pt = map.latLngToContainerPoint(latlng);
+
+        return {
+          x: pt.x,
+          y: pt.y,
+          value: Number(feature.properties[currentVariant]),
+          feature: feature
+        };
+      });
+
+      /*
+        Tamaño del píxel raster.
+        Menor = más fino pero más pesado.
+        4 o 5 suele quedar bien.
+      */
+      const step = 5;
+
+      /*
+        Potencia IDW:
+        2 = transición suave.
+        3 = algo más ajustado al punto.
+      */
+      const power = 2.2;
+
+      for (let y = 0; y < size.y; y += step) {
+        for (let x = 0; x < size.x; x += step) {
+          let numerator = 0;
+          let denominator = 0;
+
+          for (const p of points) {
+            const dx = x - p.x;
+            const dy = y - p.y;
+            const dist2 = dx * dx + dy * dy;
+
+            if (dist2 < 1) {
+              numerator = p.value;
+              denominator = 1;
+              break;
+            }
+
+            const weight = 1 / Math.pow(Math.sqrt(dist2), power);
+            numerator += p.value * weight;
+            denominator += weight;
+          }
+
+          const interpolated = numerator / denominator;
+          const c = colorContinuous(interpolated);
+
+          ctx.fillStyle = `rgba(${c.r}, ${c.g}, ${c.b}, 0.72)`;
+          ctx.fillRect(x, y, step + 1, step + 1);
+        }
+      }
+
+      /*
+        Suavizado final: se pinta el canvas interpolado
+        sobre otro canvas con un pequeño desenfoque visual.
+      */
+      const smoothCanvas = document.createElement("canvas");
+      const smoothCtx = smoothCanvas.getContext("2d");
+
+      smoothCanvas.width = size.x;
+      smoothCanvas.height = size.y;
+
+      smoothCtx.filter = "blur(3px)";
+      smoothCtx.drawImage(canvas, 0, 0);
+
+      if (rasterLayer) {
+        map.removeLayer(rasterLayer);
+      }
+
+      rasterLayer = L.imageOverlay(
+        smoothCanvas.toDataURL("image/png"),
+        map.getBounds(),
+        {
+          opacity: 0.72,
+          interactive: false
+        }
+      ).addTo(map);
+
+      rasterLayer.bringToFront();
+    }
+
+    function setVariant(variant) {
+      currentVariant = variant;
+      updateActiveButton();
+      drawRaster();
+    }
+
+    function findNearestFeature(latlng) {
+      if (!geojsonData) return null;
+
+      let nearest = null;
+      let minDist = Infinity;
 
       geojsonData.features.forEach(feature => {
-        const p = feature.properties;
         const coords = feature.geometry.coordinates;
-        const lon = coords[0];
-        const lat = coords[1];
-        const value = p[currentVariant];
+        const fLatLng = L.latLng(coords[1], coords[0]);
+        const dist = latlng.distanceTo(fLatLng);
 
-        // Media celda para GFS 0.25º
-        const dLat = 0.125;
-        const dLon = 0.125;
+        if (dist < minDist) {
+          minDist = dist;
+          nearest = feature;
+        }
+      });
 
-        const bounds = [
-          [lat - dLat, lon - dLon],
-          [lat + dLat, lon + dLon]
-        ];
+      return nearest;
+    }
 
-        const rect = L.rectangle(bounds, {
-          color: colorHaines(value),
-          weight: 0.4,
-          fillColor: colorHaines(value),
-          fillOpacity: 0.65
-        });
+    map.on("click", function(e) {
+      const feature = findNearestFeature(e.latlng);
+      if (!feature) return;
 
-        rect.bindPopup(`
+      const p = feature.properties;
+      const value = p[currentVariant];
+
+      L.popup()
+        .setLatLng(e.latlng)
+        .setContent(`
           <b>${labelVariant(currentVariant)}: ${value}</b><br>
+          <small>Punto GFS más próximo</small>
           <hr>
           <b>Haines bajo:</b> ${p.haines_bajo}<br>
           <b>Haines medio:</b> ${p.haines_medio}<br>
@@ -248,19 +417,13 @@
           <b>T500:</b> ${p.t500} ºC<br>
           <b>HR850:</b> ${p.rh850} %<br>
           <b>HR700:</b> ${p.rh700} %
-        `);
+        `)
+        .openOn(map);
+    });
 
-        rect.addTo(currentLayer);
-      });
-
-      currentLayer.addTo(map);
-    }
-
-    function setVariant(variant) {
-      currentVariant = variant;
-      updateActiveButton();
-      drawLayer();
-    }
+    map.on("moveend zoomend resize", function() {
+      drawRaster();
+    });
 
     fetch("haines.geojson")
       .then(response => {
@@ -271,7 +434,7 @@
       })
       .then(data => {
         geojsonData = data;
-        drawLayer();
+        drawRaster();
       })
       .catch(error => {
         document.getElementById("metadata").innerHTML =

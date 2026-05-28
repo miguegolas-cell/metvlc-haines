@@ -21,10 +21,10 @@ def score(values, low_limit, mid_limit):
     2 = medio
     3 = alto
     """
-    return np.where(
+    return xr.where(
         values <= low_limit,
         1,
-        np.where(values <= mid_limit, 2, 3)
+        xr.where(values <= mid_limit, 2, 3)
     )
 
 
@@ -38,11 +38,26 @@ def get_level(ds, var_name, level):
     return ds[var_name].sel(isobaricInhPa=level)
 
 
+def dewpoint_from_temp_rh(temp_c, rh_percent):
+    """
+    Calcula punto de rocío en ºC a partir de temperatura en ºC
+    y humedad relativa en % usando la aproximación de Magnus.
+    """
+    rh = rh_percent.clip(min=1, max=100)
+
+    a = 17.625
+    b = 243.04
+
+    gamma = np.log(rh / 100.0) + (a * temp_c) / (b + temp_c)
+    td = (b * gamma) / (a - gamma)
+
+    return td
+
+
 def main():
     if not GRIB_FILE.exists():
         raise FileNotFoundError(f"No existe {GRIB_FILE}")
 
-    # Abrir GRIB con cfgrib
     ds = xr.open_dataset(
         GRIB_FILE,
         engine="cfgrib",
@@ -54,23 +69,25 @@ def main():
 
     print(ds)
 
-    # En GFS con cfgrib normalmente:
-    # t   = temperatura en K
-    # dpt = punto de rocío en K
     if "t" not in ds:
         raise ValueError("No encuentro la variable de temperatura 't' en el GRIB")
 
-    if "dpt" not in ds:
-        raise ValueError("No encuentro la variable de punto de rocío 'dpt' en el GRIB")
+    if "r" not in ds:
+        raise ValueError("No encuentro la variable de humedad relativa 'r' en el GRIB")
 
-    # Pasar de Kelvin a Celsius
+    # Temperaturas en ºC
     t950 = get_level(ds, "t", 950) - 273.15
     t850 = get_level(ds, "t", 850) - 273.15
     t700 = get_level(ds, "t", 700) - 273.15
     t500 = get_level(ds, "t", 500) - 273.15
 
-    td850 = get_level(ds, "dpt", 850) - 273.15
-    td700 = get_level(ds, "dpt", 700) - 273.15
+    # Humedad relativa en %
+    rh850 = get_level(ds, "r", 850)
+    rh700 = get_level(ds, "r", 700)
+
+    # Punto de rocío estimado en ºC a partir de T + HR
+    td850 = dewpoint_from_temp_rh(t850, rh850)
+    td700 = dewpoint_from_temp_rh(t700, rh700)
 
     # ==========================
     # HAINES BAJO
@@ -116,6 +133,7 @@ def main():
     for i, lat in enumerate(lats):
         for j, lon in enumerate(lons):
             lon_value = float(lon)
+
             if lon_value > 180:
                 lon_value -= 360
 
@@ -133,12 +151,23 @@ def main():
                     "haines_bajo": hb,
                     "haines_medio": hm,
                     "haines_alto": ha,
+
                     "estabilidad_baja": round(float(estabilidad_baja.values[i, j]), 1),
                     "sequedad_baja": round(float(sequedad_baja.values[i, j]), 1),
+
                     "estabilidad_media": round(float(estabilidad_media.values[i, j]), 1),
                     "sequedad_media": round(float(sequedad_media.values[i, j]), 1),
+
                     "estabilidad_alta": round(float(estabilidad_alta.values[i, j]), 1),
                     "sequedad_alta": round(float(sequedad_alta.values[i, j]), 1),
+
+                    "t850": round(float(t850.values[i, j]), 1),
+                    "t700": round(float(t700.values[i, j]), 1),
+                    "t500": round(float(t500.values[i, j]), 1),
+                    "rh850": round(float(rh850.values[i, j]), 1),
+                    "rh700": round(float(rh700.values[i, j]), 1),
+                    "td850_estimado": round(float(td850.values[i, j]), 1),
+                    "td700_estimado": round(float(td700.values[i, j]), 1),
                 }
             }
 
@@ -155,6 +184,7 @@ def main():
     )
 
     metadata = {}
+
     if META_FILE.exists():
         metadata = json.loads(META_FILE.read_text(encoding="utf-8"))
 
@@ -163,6 +193,7 @@ def main():
         "description": "Cálculo experimental del Índice de Haines bajo, medio y alto a partir de GFS 0.25",
         "geojson": str(OUT_GEOJSON),
         "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "dewpoint_method": "Punto de rocío estimado a partir de temperatura y humedad relativa mediante fórmula de Magnus",
         "variants": {
             "bajo": "950-850 hPa + sequedad en 850 hPa",
             "medio": "850-700 hPa + sequedad en 850 hPa",

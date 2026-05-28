@@ -171,13 +171,15 @@
     let rasterLayer = null;
 
     const map = L.map("map", {
-      preferCanvas: true,
-      maxBounds: [
-        [37.50, -2.10],
-        [41.15, 1.15]
-      ],
-      maxBoundsViscosity: 0.8
-    }).setView([39.45, -0.45], 8);
+  preferCanvas: true,
+  minZoom: 7,
+  maxZoom: 11,
+  maxBounds: [
+    [37.60, -1.80],
+    [40.95, 0.90]
+  ],
+  maxBoundsViscosity: 1.0
+}).setView([39.35, -0.35], 8);
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 12,

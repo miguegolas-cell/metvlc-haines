@@ -1,10 +1,10 @@
 {
   "source": "NOAA NOMADS GFS 0.25",
   "date": "20260530",
-  "cycle_utc": "06",
+  "cycle_utc": "12",
   "forecast_hour": 0,
   "file": "data/latest_haines.grib2",
-  "size_bytes": 3696,
+  "size_bytes": 3824,
   "bbox": {
     "leftlon": -2.5,
     "rightlon": 1.5,
@@ -22,12 +22,12 @@
     "var_DPT",
     "var_RH"
   ],
-  "download_url": "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?file=gfs.t06z.pgrb2.0p25.f000&subregion=&leftlon=-2.5&rightlon=1.5&toplat=41.0&bottomlat=37.5&dir=%2Fgfs.20260530%2F06%2Fatmos&lev_950_mb=on&lev_850_mb=on&lev_700_mb=on&lev_500_mb=on&var_TMP=on&var_DPT=on&var_RH=on",
-  "updated_utc": "2026-05-30T10:26:29.452063+00:00",
+  "download_url": "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?file=gfs.t12z.pgrb2.0p25.f000&subregion=&leftlon=-2.5&rightlon=1.5&toplat=41.0&bottomlat=37.5&dir=%2Fgfs.20260530%2F12%2Fatmos&lev_950_mb=on&lev_850_mb=on&lev_700_mb=on&lev_500_mb=on&var_TMP=on&var_DPT=on&var_RH=on",
+  "updated_utc": "2026-05-30T19:57:11.413274+00:00",
   "product": "Índice de Haines",
   "description": "Cálculo experimental del Índice de Haines bajo, medio y alto a partir de GFS 0.25",
   "geojson": "docs/haines.geojson",
-  "generated_utc": "2026-05-30T10:26:30.529120+00:00",
+  "generated_utc": "2026-05-30T19:57:12.444738+00:00",
   "dewpoint_method": "Punto de rocío estimado a partir de temperatura y humedad relativa mediante fórmula de Magnus",
   "variants": {
     "bajo": "950-850 hPa + sequedad en 850 hPa",

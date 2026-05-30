@@ -1,10 +1,10 @@
 {
   "source": "NOAA NOMADS GFS 0.25",
-  "date": "20260529",
-  "cycle_utc": "18",
+  "date": "20260530",
+  "cycle_utc": "06",
   "forecast_hour": 0,
   "file": "data/latest_haines.grib2",
-  "size_bytes": 3792,
+  "size_bytes": 3696,
   "bbox": {
     "leftlon": -2.5,
     "rightlon": 1.5,
@@ -22,6 +22,6 @@
     "var_DPT",
     "var_RH"
   ],
-  "download_url": "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?file=gfs.t18z.pgrb2.0p25.f000&subregion=&leftlon=-2.5&rightlon=1.5&toplat=41.0&bottomlat=37.5&dir=%2Fgfs.20260529%2F18%2Fatmos&lev_950_mb=on&lev_850_mb=on&lev_700_mb=on&lev_500_mb=on&var_TMP=on&var_DPT=on&var_RH=on",
-  "updated_utc": "2026-05-29T22:11:46.494735+00:00"
+  "download_url": "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?file=gfs.t06z.pgrb2.0p25.f000&subregion=&leftlon=-2.5&rightlon=1.5&toplat=41.0&bottomlat=37.5&dir=%2Fgfs.20260530%2F06%2Fatmos&lev_950_mb=on&lev_850_mb=on&lev_700_mb=on&lev_500_mb=on&var_TMP=on&var_DPT=on&var_RH=on",
+  "updated_utc": "2026-05-30T10:26:29.452063+00:00"
 }

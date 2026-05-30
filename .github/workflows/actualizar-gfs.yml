@@ -1,8 +1,11 @@
-name: Actualizar GRIB GFS Haines
+name: Actualizar Haines GFS
 
 on:
   schedule:
-    - cron: "40 3,9,15,21 * * *"
+    # Una vez al día.
+    # Descarga GFS 00 UTC +15 h.
+    # 07:30 UTC da margen para que el ciclo 00 esté disponible.
+    - cron: "30 7 * * *"
 
   workflow_dispatch:
 
@@ -30,16 +33,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Descargar último GRIB GFS
-        run: python scripts/download_gfs_haines.py
-
-      - name: Calcular Índice de Haines
+      - name: Procesar Haines GFS
         run: python scripts/process_haines.py
 
-      - name: Guardar resultados en el repositorio
+      - name: Guardar resultados
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest_haines.grib2 data/metadata.json docs/haines.geojson docs/haines_metadata.json
-          git commit -m "Actualiza GRIB y Haines" || echo "Sin cambios que guardar"
+          git add docs/*.geojson docs/*.json docs/*.png data/*
+          git commit -m "Actualiza Haines GFS 00 UTC +15 h" || echo "Sin cambios que guardar"
           git push

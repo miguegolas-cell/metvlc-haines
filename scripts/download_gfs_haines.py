@@ -16,6 +16,12 @@ FORECAST_HOUR = 15
 RESOLUTION = "0p25"
 
 
+def get_valid_time_iso(date_yyyymmdd):
+    base = datetime.strptime(date_yyyymmdd + CYCLE, "%Y%m%d%H").replace(tzinfo=timezone.utc)
+    valid = base + timedelta(hours=FORECAST_HOUR)
+    return valid.isoformat()
+
+
 def build_nomads_url(date_yyyymmdd):
     file_name = f"gfs.t{CYCLE}z.pgrb2.{RESOLUTION}.f{FORECAST_HOUR:03d}"
 
@@ -25,7 +31,7 @@ def build_nomads_url(date_yyyymmdd):
         "dir": f"/gfs.{date_yyyymmdd}/{CYCLE}/atmos",
         "file": file_name,
 
-        # Variables necesarias
+        # Variables necesarias para Haines
         "var_TMP": "on",
         "var_RH": "on",
 
@@ -35,8 +41,7 @@ def build_nomads_url(date_yyyymmdd):
         "lev_700_mb": "on",
         "lev_500_mb": "on",
 
-        # Recorte aproximado entorno Comunitat Valenciana
-        # NOMADS usa leftlon/rightlon/toplat/bottomlat
+        # Recorte aproximado Comunitat Valenciana
         "subregion": "",
         "leftlon": "-2.0",
         "rightlon": "1.0",
@@ -46,6 +51,13 @@ def build_nomads_url(date_yyyymmdd):
 
     query = "&".join(f"{k}={v}" for k, v in params.items())
     return f"{base_url}?{query}", file_name
+
+
+def is_grib(content):
+    """
+    Comprueba si la respuesta empieza como un archivo GRIB.
+    """
+    return content[:4] == b"GRIB"
 
 
 def try_download_for_date(date_yyyymmdd):
@@ -67,12 +79,14 @@ def try_download_for_date(date_yyyymmdd):
     if response.status_code != 200:
         return False, url, file_name, f"HTTP {response.status_code}"
 
-    if len(response.content) < 10_000:
-        sample = response.content[:500].decode("utf-8", errors="replace")
-        print("Respuesta demasiado pequeña:")
+    # Si NOMADS devuelve HTML de error, normalmente no empieza por GRIB.
+    if not is_grib(response.content):
+        sample = response.content[:800].decode("utf-8", errors="replace")
+        print("La respuesta no parece GRIB:")
         print(sample)
-        return False, url, file_name, "Respuesta demasiado pequeña"
+        return False, url, file_name, "La respuesta no empieza por GRIB"
 
+    # Aunque sea pequeño, si empieza por GRIB lo aceptamos.
     OUT_GRIB.write_bytes(response.content)
 
     metadata = {
@@ -96,20 +110,16 @@ def try_download_for_date(date_yyyymmdd):
         encoding="utf-8"
     )
 
+    print("GRIB guardado correctamente.")
+    print("Archivo:", OUT_GRIB)
+    print("Metadata:", OUT_META)
+
     return True, url, file_name, "OK"
-
-
-def get_valid_time_iso(date_yyyymmdd):
-    base = datetime.strptime(date_yyyymmdd + CYCLE, "%Y%m%d%H").replace(tzinfo=timezone.utc)
-    valid = base + timedelta(hours=FORECAST_HOUR)
-    return valid.isoformat()
 
 
 def main():
     now = datetime.now(timezone.utc)
 
-    # Intentamos primero la fecha UTC actual.
-    # Si el ciclo 00 aún no estuviera disponible, probamos el día anterior.
     candidate_dates = [
         now.strftime("%Y%m%d"),
         (now - timedelta(days=1)).strftime("%Y%m%d"),
@@ -122,8 +132,6 @@ def main():
 
         if ok:
             print("Descarga correcta")
-            print("Archivo:", OUT_GRIB)
-            print("Metadata:", OUT_META)
             return
 
         errors.append({

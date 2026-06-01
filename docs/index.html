@@ -570,62 +570,30 @@ drawRaster();
       });
 
     fetch("haines_metadata.json")
-      .then(response => {
-        if (!response.ok) {
-          throw new Error("No se pudo cargar haines_metadata.json");
-        }
-        return response.json();
-      })
-      .then(meta => {
-        function formatMadridTime(isoString) {
-  if (!isoString) return "—";
+  .then(response => {
+    if (!response.ok) {
+      throw new Error("No se pudo cargar haines_metadata.json");
+    }
+    return response.json();
+  })
+  .then(meta => {
+    function formatMadridTime(isoString) {
+      ...
+    }
 
-  const fecha = new Date(isoString);
+    function cycleToMadridTime(metadata) {
+      ...
+    }
 
-  return fecha.toLocaleString("es-ES", {
-    timeZone: "Europe/Madrid",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
+    function pintarMetadatos(metadata) {
+      ...
+    }
+  })
+  .catch(error => {
+    document.getElementById("metadata").innerHTML =
+      "No se han podido cargar los metadatos.";
+    console.error(error);
   });
-}
-
-function cycleToMadridTime(metadata) {
-  if (!metadata.cycle_date || !metadata.cycle) return "—";
-
-  const year = metadata.cycle_date.slice(0, 4);
-  const month = metadata.cycle_date.slice(4, 6);
-  const day = metadata.cycle_date.slice(6, 8);
-  const hour = metadata.cycle.padStart(2, "0");
-
-  const iso = `${year}-${month}-${day}T${hour}:00:00+00:00`;
-
-  return formatMadridTime(iso);
-}
-
-function pintarMetadatos(metadata) {
-  const fuente = metadata.source || "NOAA NOMADS GFS 0.25";
-  const cicloPeninsular = cycleToMadridTime(metadata);
-  const prediccion = metadata.forecast_label || "—";
-  const validoPeninsular = formatMadridTime(metadata.valid_utc);
-  const generadoPeninsular = formatMadridTime(metadata.generated_utc);
-
-  document.getElementById("metadata").innerHTML = `
-    <b>Fuente:</b> ${fuente} ·
-    <b>Ciclo GFS:</b> ${cicloPeninsular} hora peninsular ·
-    <b>Predicción:</b> ${prediccion}<br>
-    <b>Válido para:</b> ${validoPeninsular} hora peninsular ·
-    <b>Generado:</b> ${generadoPeninsular} hora peninsular
-  `;
-}
-      })
-      .catch(error => {
-        document.getElementById("metadata").innerHTML =
-          "No se han podido cargar los metadatos.";
-        console.error(error);
-      });
   </script>
 
 </body>

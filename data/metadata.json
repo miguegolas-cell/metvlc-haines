@@ -10,6 +10,6 @@
   "valid_utc": "2026-06-18T15:00:00+00:00",
   "file": "gfs.t00z.pgrb2.0p25.f015",
   "url": "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_0p25.pl?dir=/gfs.20260618/00/atmos&file=gfs.t00z.pgrb2.0p25.f015&var_TMP=on&var_RH=on&lev_950_mb=on&lev_850_mb=on&lev_700_mb=on&lev_500_mb=on&subregion=&leftlon=-2.0&rightlon=1.0&toplat=41.0&bottomlat=37.5",
-  "downloaded_utc": "2026-06-18T11:55:09.398020+00:00",
+  "downloaded_utc": "2026-06-18T18:13:57.221786+00:00",
   "note": "GFS 00 UTC +15 h. Producto orientado a la situación de tarde."
 }
